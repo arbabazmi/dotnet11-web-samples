@@ -14,6 +14,7 @@ param(
   [switch]$Cleanup
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Net.Http
 $root = Split-Path $PSScriptRoot -Parent; Set-Location $root
 $Cluster = 'aotbench'; $Repo = 'aotbench'; $Sg = 'aotbench-sg'; $Role = 'aotbench-exec'
 

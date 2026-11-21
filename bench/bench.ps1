@@ -12,6 +12,7 @@ param(
   [int]$Port = 18080
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Net.Http
 $root = Split-Path $PSScriptRoot -Parent
 Set-Location $root
 
@@ -20,6 +21,10 @@ $defs = @{
   B = @{ Dotnet='10.0'; Tfm='net10.0'; Target='aot'; Label='net10 AOT' }
   C = @{ Dotnet='11.0'; Tfm='net11.0'; Target='jit'; Label='net11 JIT' }
   D = @{ Dotnet='11.0'; Tfm='net11.0'; Target='aot'; Label='net11 AOT' }
+}
+function Invoke-Docker {   # docker writes progress to stderr, which Stop would treat as an error
+  $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  try { & docker @args } finally { $ErrorActionPreference = $old }
 }
 $http = [System.Net.Http.HttpClient]::new()
 $http.Timeout = [TimeSpan]::FromSeconds(2)
@@ -31,9 +36,9 @@ function Get-Percentile($values, [double]$p) {
   return $s[$i]
 }
 function Start-Container($tag) {
-  docker run -d --rm -p "${Port}:8080" --name aotbench-run "aotbench:$tag" | Out-Null
+  Invoke-Docker run -d --rm -p "${Port}:8080" --name aotbench-run "aotbench:$tag" | Out-Null
 }
-function Stop-Container { docker rm -f aotbench-run 2>$null | Out-Null }
+function Stop-Container { Invoke-Docker rm -f aotbench-run 2>&1 | Out-Null }
 function Wait-Health {
   while ($true) {
     try { if ($http.GetAsync("$base/health").Result.IsSuccessStatusCode) { return } } catch { }
@@ -59,12 +64,12 @@ foreach ($v in $Variants) {
   Write-Host "=== Variant $v ($($d.Label)) ==="
   if (-not $SkipBuild) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    docker build -f bench/Dockerfile --target $d.Target -t "aotbench:$tag" `
-      --build-arg DOTNET=$($d.Dotnet) --build-arg TFM=$($d.Tfm) . | Out-Null
+    Invoke-Docker build --progress=quiet -f bench/Dockerfile --target $d.Target -t "aotbench:$tag" `
+      --build-arg DOTNET=$($d.Dotnet) --build-arg TFM=$($d.Tfm) . 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "docker build failed for $v" }
     $buildSec = [Math]::Round($sw.Elapsed.TotalSeconds, 1)
   } else { $buildSec = $null }
-  $sizeMb = [Math]::Round([double](docker image inspect "aotbench:$tag" --format '{{.Size}}') / 1MB, 1)
+  $sizeMb = [Math]::Round([double](Invoke-Docker image inspect "aotbench:$tag" --format '{{.Size}}') / 1MB, 1)
 
   Stop-Container
   Start-Container $tag; Wait-Health; Invoke-Smoke; Stop-Container   # smoke tests

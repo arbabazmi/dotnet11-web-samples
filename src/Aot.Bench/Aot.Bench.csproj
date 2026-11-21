@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <!-- Same source for all four variants; the target is chosen at publish time with -f. -->
-    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+    <!-- Same source for all four variants; choose the target with -p:BenchTfm=net10.0 (default net11.0).
+         A multi-targeting csproj cannot be restored by the .NET 10 SDK, which rejects net11.0. -->
+    <BenchTfm Condition="'$(BenchTfm)' == ''">net11.0</BenchTfm>
+    <TargetFramework>$(BenchTfm)</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <InvariantGlobalization>true</InvariantGlobalization>

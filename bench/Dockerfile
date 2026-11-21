@@ -7,7 +7,7 @@ FROM mcr.microsoft.com/dotnet/sdk:${DOTNET} AS build-jit
 ARG TFM=net11.0
 WORKDIR /src
 COPY src/Aot.Bench/ .
-RUN dotnet publish -f ${TFM} -c Release -o /out
+RUN dotnet publish -p:BenchTfm=${TFM} -c Release -o /out
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET} AS build-aot
 ARG TFM=net11.0
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends clang zlib1g-de
 WORKDIR /src
 COPY src/Aot.Bench/ .
 # Publish output (including compiler warnings) is kept in /out/publish.log for the results write-up.
-RUN dotnet publish -f ${TFM} -c Release -p:Aot=true -o /out 2>&1 | tee /publish.log
+RUN dotnet publish -p:BenchTfm=${TFM} -c Release -p:Aot=true -o /out 2>&1 | tee /publish.log
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET} AS jit
 ENV ASPNETCORE_HTTP_PORTS=8080
