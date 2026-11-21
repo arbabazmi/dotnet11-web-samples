@@ -26,8 +26,6 @@ Prerequisites: Docker running. From the repo root:
 ```powershell
 ./bench/bench.ps1                 # builds A-D, smoke-tests each, 30 cold runs, 100-request memory check
 ./bench/bench.ps1 -Runs 5 -Variants C,D -SkipBuild   # quick check
-./bench/aws.ps1                   # Fargate (0.5 vCPU / 1 GB, x86_64); needs AWS credentials
-./bench/aws.ps1 -Cleanup          # remove everything the script created
 ```
 
 Metrics:
