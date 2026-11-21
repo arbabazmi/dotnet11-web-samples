@@ -1,0 +1,2 @@
+Build FAILED.
+C:\arbab-github\dotnet11-web-samples\src\FeeCalc.Api\Http\UnionHttpMapping.cs(11,68): error CS8509: The switch expression does not handle all possible values of its input type (it is not exhaustive). For example, the pattern 'FeeCalc.Api.Domain.ValidationFailed' is not covered. [C:\arbab-github\dotnet11-web-samples\src\FeeCalc.Api\FeeCalc.Api.csproj]
