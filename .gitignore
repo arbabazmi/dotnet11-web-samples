@@ -4,3 +4,4 @@ obj/
 *.user
 # local planning doc (names employer); keep out of the public repo
 NET 11 Web Sample Projects Spec.md
+artifacts/
