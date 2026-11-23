@@ -23,7 +23,7 @@ Tiers: `bronze`, `silver`, `gold`. `silver` has no Advisory rate, which triggers
 curl -H "content-type: application/json" localhost:5000/fees/calculate -d '{"accountType":"Brokerage","amount":10000,"tier":"gold"}'
 ```
 
-## Findings (for the article)
+## Findings
 
 - **Unions compile** on SDK 11.0.100 (`public union CalcResult(Calculated, RateNotFound, ValidationFailed);`).
 - **Exhaustiveness is a warning by default** (CS8509). The project sets `<WarningsAsErrors>CS8509</WarningsAsErrors>` so a missing case fails the build; see `docs/articles/compiler-diagnostic.txt`.

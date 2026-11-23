@@ -114,7 +114,7 @@ Chat.razor ── UIAgent ── FunctionInvokingChatClient ── IChatClient (
   `FunctionApprovalBlock` (tool name, arguments, Approve and Reject buttons) and `FunctionInvocationContentBlock`
   (tool call and result).
 
-## Findings (for the article)
+## Findings
 
 - **The AI components are experimental and early**: version `0.1.0-preview.1`, described as experimental in the release notes.
 - **`UIAgent` does not run tools.** It is provider-neutral and only maps a streaming `IChatClient` into content blocks. Tool
@@ -131,6 +131,10 @@ Chat.razor ── UIAgent ── FunctionInvokingChatClient ── IChatClient (
 - **Render mode**: a page-level `@rendermode InteractiveServer` with a static layout logged a Sections warning (the page
   title may stop updating after the page becomes interactive). Setting `@rendermode="InteractiveServer"` on `HeadOutlet` and
   `Routes` in `App.razor` removed it.
+- **A mixed batch asks approval for everything.** When a real model requests a lookup and a change in one step, the framework
+  asks approval for every call in the batch, including the read-only one. `AutoApprove.razor` approves read-only calls
+  (by the server's annotation) so only the change waits for a click.
+- **The package stylesheet must be linked** (`_content/Microsoft.AspNetCore.Components.AI/ai-chat.css`); without it the input is unstyled.
 - **Preview package pulls RC dependencies.** It depends on `Microsoft.AspNetCore.Components.Web` 11.0.0-rc.1, which brings
   `Microsoft.Extensions.Validation` 11.0.0-rc.1 (a moderate advisory, GHSA-m28h-pj36-4364). The web app itself is not affected
   because the GA ASP.NET Core 11 framework supersedes it; the plain test project had to pin `Microsoft.Extensions.Validation` 11.0.0.
@@ -141,9 +145,9 @@ Chat.razor ── UIAgent ── FunctionInvokingChatClient ── IChatClient (
 dotnet test tests/CommissionMcp.Web.Tests
 ```
 
-Ten tests: five configuration tests for the model providers, and five that drive the real `UIAgent` and `AgentContext` against the in-memory MCP server with the Demo client, no browser:
+Eleven tests: five configuration tests for the model providers, and six that drive the real `UIAgent` and `AgentContext` against the in-memory MCP server with the Demo client, no browser:
 which tools need approval, a read-only question (calls shown, no approval), a write that pauses and changes nothing until
-approved, a rejection (data unchanged, model told it was declined), and an approved call the server refuses.
+approved, a rejection (data unchanged, model told it was declined), an approved call the server refuses, and a follow-up request that reuses the advisor from an earlier turn.
 
 ## Live tests (opt-in)
 
@@ -171,8 +175,11 @@ is not deterministic.
 
 ## Not verified yet
 
-- The page was served and rendered over HTTP (title, welcome text, input box), but I have **not clicked through the
-  interactive UI in a browser**: streaming in the page and the Approve and Reject buttons are covered by the headless tests
-  that use the same `UIAgent` and blocks, not by a browser test.
-- Only one real model has been tried: `qwen2.5:7b` through Ollama, in the headless live tests. Other models, and hosted ones such as OpenAI, have not.
-- The second screenshot for the article (calling the MCP server from a different MCP client) has not been taken.
+- **Browser runs used Chrome, headless, driven by a script.** With the Demo model the full flow was checked (question, streaming,
+  tool rows, approval, Approve, Reject, example cards, dark mode, phone width) with no console errors. With the real model
+  (`qwen2.5:7b`) the answer and approval card were checked, and a change was approved and applied. Other browsers and manual
+  use on a phone are untested.
+- Only one real model has been tried: `qwen2.5:7b` through Ollama. Other models, and hosted ones such as OpenAI, have not.
+- Auto-approval of read-only lookups in a mixed batch is implemented and the real-model run worked, but that run may not have
+  produced a mixed batch, so the path has no test.
+- The server has not been called from a different MCP client application such as the MCP Inspector.
