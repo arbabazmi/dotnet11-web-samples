@@ -64,9 +64,8 @@ public sealed partial class ScriptedChatClient(TimeSpan? tokenDelay = null) : IC
             if (amount is null)
                 return ($"How much should the payout for {id} change by? For example: \"Reduce {id} payout by $250 because of a duplicate trade\".", []);
 
-            var reason = ReasonText().Match(text) is { Success: true } m && m.Groups[1].Value.Trim().Length >= 5
-                ? m.Groups[1].Value.Trim().TrimEnd('.')
-                : "Requested in chat";
+            var reason = ReasonText().Match(text) is { Success: true } m ? CleanReason(m.Groups[1].Value) : "";
+            if (reason.Length < 5) reason = "Requested in chat";
             return ($"I'll adjust the open-month payout for {id} by {Money(amount.Value)}. This changes data, so it needs your approval.",
                 [Call("adjust_payout", new() { ["advisorId"] = id, ["amount"] = amount.Value, ["reason"] = reason })]);
         }
@@ -74,6 +73,13 @@ public sealed partial class ScriptedChatClient(TimeSpan? tokenDelay = null) : IC
         var calls = new List<FunctionCallContent> { Call("get_advisor_summary", new() { ["advisorId"] = id }) };
         if (month is not null) calls.Add(Call("get_statement", new() { ["advisorId"] = id, ["month"] = month }));
         return ($"Let me look up {id}{(month is null ? "" : $" for {month}")}.", calls);
+    }
+
+    /// <summary>"because of a duplicate trade" -> "A duplicate trade": drop the lead-in words and capitalise.</summary>
+    private static string CleanReason(string raw)
+    {
+        var s = LeadIn().Replace(raw.Trim().TrimEnd('.'), "");
+        return s.Length == 0 ? "" : char.ToUpperInvariant(s[0]) + s[1..];
     }
 
     private static FunctionCallContent Call(string name, Dictionary<string, object?> args) =>
@@ -208,4 +214,5 @@ public sealed partial class ScriptedChatClient(TimeSpan? tokenDelay = null) : IC
     [GeneratedRegex(@"\$?\s?(\d[\d,]*(?:\.\d{1,2})?)")] private static partial Regex Amount();
     [GeneratedRegex(@"(?:because|reason:?)\s+(.+)$", RegexOptions.IgnoreCase)] private static partial Regex ReasonText();
     [GeneratedRegex(@"reject|declin|denied|not approved", RegexOptions.IgnoreCase)] private static partial Regex Rejected();
+    [GeneratedRegex(@"^(of|that|the|for|to)\s+", RegexOptions.IgnoreCase)] private static partial Regex LeadIn();
 }
