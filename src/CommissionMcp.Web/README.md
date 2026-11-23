@@ -24,19 +24,52 @@ needs no key (see below). Try:
 
 ## Use a real model
 
-The chat client is built from configuration. Any OpenAI-compatible endpoint works (OpenAI, Azure OpenAI, Ollama, and others).
-The key never goes in the repository; keep it in user secrets or an environment variable.
+The chat client is built from configuration (`Services/ChatClientFactory.cs`). Keys never go in the repository; use user
+secrets or environment variables.
+
+### Ollama (local, no key)
+
+1. Install Ollama and pull a model that supports **tool calling**:
+
+   ```powershell
+   winget install --id Ollama.Ollama -e
+   ollama pull qwen2.5:7b          # or llama3.1:8b
+   ollama show qwen2.5:7b          # the "Capabilities" list must include: tools
+   ```
+
+   Ollama serves an OpenAI-compatible API at `http://localhost:11434/v1`.
+
+2. Point the app at it:
+
+   ```powershell
+   cd src/CommissionMcp.Web
+   dotnet user-secrets init
+   dotnet user-secrets set "Chat:Provider" "Ollama"
+   dotnet user-secrets set "Chat:Model" "qwen2.5:7b"
+   ```
+
+   `Chat:Endpoint` defaults to `http://localhost:11434/v1` and no API key is needed. The network timeout is 5 minutes,
+   because a model running on a CPU can take a while to load and to answer.
+
+3. Run the MCP server and the web app as above, then ask: `Summarize advisor A-102 for October`.
+
+The model must support tool calling, otherwise it will answer in text and never call the MCP tools. Small models
+sometimes pick the wrong tool or arguments; that is a property of the model, not of the approval flow.
+
+### Other OpenAI-compatible endpoints
 
 ```powershell
-cd src/CommissionMcp.Web
 dotnet user-secrets set "Chat:Provider" "OpenAI"
 dotnet user-secrets set "Chat:Model" "<model name>"
 dotnet user-secrets set "Chat:ApiKey" "<your key>"
-dotnet user-secrets set "Chat:Endpoint" "<optional base URL, e.g. http://localhost:11434/v1 for Ollama>"
+dotnet user-secrets set "Chat:Endpoint" "<optional base URL>"
 ```
 
-Environment variables work too (`Chat__Provider`, `Chat__Model`, `Chat__ApiKey`, `Chat__Endpoint`). The MCP server address is
-`Mcp:Endpoint` (default `http://localhost:5290/mcp`). **A real model has not been tried yet**; only the Demo provider has run.
+Environment variables work too (`Chat__Provider`, `Chat__Model`, `Chat__ApiKey`, `Chat__Endpoint`). The MCP server address
+is `Mcp:Endpoint` (default `http://localhost:5290/mcp`).
+
+**No real model has been run yet**; only the Demo provider has. Ollama was not installed on the development machine, so the
+Ollama path is covered by configuration tests only.
 
 ## The Demo provider
 
@@ -88,7 +121,7 @@ Chat.razor ── UIAgent ── FunctionInvokingChatClient ── IChatClient (
 dotnet test tests/CommissionMcp.Web.Tests
 ```
 
-Five tests drive the real `UIAgent` and `AgentContext` against the in-memory MCP server with the Demo client, no browser:
+Ten tests: five configuration tests for the model providers, and five that drive the real `UIAgent` and `AgentContext` against the in-memory MCP server with the Demo client, no browser:
 which tools need approval, a read-only question (calls shown, no approval), a write that pauses and changes nothing until
 approved, a rejection (data unchanged, model told it was declined), and an approved call the server refuses.
 
@@ -97,5 +130,5 @@ approved, a rejection (data unchanged, model told it was declined), and an appro
 - The page was served and rendered over HTTP (title, welcome text, input box), but I have **not clicked through the
   interactive UI in a browser**: streaming in the page and the Approve and Reject buttons are covered by the headless tests
   that use the same `UIAgent` and blocks, not by a browser test.
-- No real language model has been used.
+- No real language model has been used (Ollama support is configured and unit-tested, but Ollama has not been run).
 - The second screenshot for the article (calling the MCP server from a different MCP client) has not been taken.
