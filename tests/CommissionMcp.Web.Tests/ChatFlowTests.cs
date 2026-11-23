@@ -67,6 +67,23 @@ public class ChatFlowTests
     }
 
     [Fact]
+    public async Task Follow_up_change_request_reuses_the_advisor_from_the_earlier_question()
+    {
+        await using var p = await Pipeline.CreateAsync();
+
+        await p.Chat.SendMessageAsync("Summarize advisor A-105");
+        var send = p.Chat.SendMessageAsync("Can we add $500 in the adjustment");
+        await p.WaitForAsync(ConversationStatus.AwaitingInput);
+
+        var approval = p.Approval!;
+        Assert.Equal("adjust_payout", approval.ToolName);
+        Assert.Equal("A-105", approval.Arguments!["advisorId"]?.ToString());
+        Assert.Equal(500m, Convert.ToDecimal(approval.Arguments["amount"], CultureInfo.InvariantCulture));
+        approval.Reject("The user declined this change.");
+        await send;
+    }
+
+    [Fact]
     public async Task Rejecting_leaves_data_unchanged_and_tells_the_model_it_was_declined()
     {
         await using var p = await Pipeline.CreateAsync();

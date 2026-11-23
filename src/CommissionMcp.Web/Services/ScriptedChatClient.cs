@@ -41,13 +41,30 @@ public sealed partial class ScriptedChatClient(TimeSpan? tokenDelay = null) : IC
             yield break;
         }
 
-        var (intro, calls) = Plan(userText);
+        var earlier = list.Take(Math.Max(lastUser, 0)).Where(m => m.Role == ChatRole.User).Select(m => m.Text).ToList();
+        var (intro, calls) = Plan(WithContext(userText, earlier));
         await foreach (var u in Stream(intro, cancellationToken)) yield return u;
         foreach (var call in calls)
             yield return new ChatResponseUpdate { Role = ChatRole.Assistant, Contents = [call] };
     }
 
     // ---- planning: which tools to call for this question ----
+
+    /// <summary>
+    /// A real model remembers the conversation; this one borrows just enough. A change request with no advisor id uses the
+    /// last id mentioned, and a bare answer ("A-105") completes the previous change request that was missing it.
+    /// </summary>
+    private static string WithContext(string text, List<string> earlier)
+    {
+        if (earlier.Count == 0) return text;
+        var previous = earlier[^1];
+        var hasId = AdvisorId().IsMatch(text);
+        if (!AdjustWords().IsMatch(text))
+            return hasId && AdjustWords().IsMatch(previous) && !AdvisorId().IsMatch(previous) ? previous + " " + text : text;
+        if (hasId) return text;
+        var lastId = earlier.Select(e => AdvisorId().Match(e)).LastOrDefault(m => m.Success);
+        return lastId is null ? text : text + " " + lastId.Value;
+    }
 
     private static (string Intro, List<FunctionCallContent> Calls) Plan(string text)
     {
