@@ -1,0 +1,31 @@
+@using Microsoft.AspNetCore.Components.AI
+
+<div class="prompt-grid">
+    @foreach (var p in Prompts)
+    {
+        <button type="button" class="prompt-card" disabled="@(Chat is null)" @onclick="() => SendAsync(p.Text)">
+            <span class="prompt-title">@p.Title</span>
+            <span class="prompt-text">@p.Text</span>
+            @if (p.AsksApproval)
+            {
+                <span class="prompt-tag">asks for approval</span>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    private sealed record Prompt(string Title, string Text, bool AsksApproval = false);
+
+    private static readonly Prompt[] Prompts =
+    [
+        new("Summarize an advisor", "Summarize advisor A-102 for October"),
+        new("Read a statement", "Show the statement for A-101 for 2026-09"),
+        new("Change a payout", "Reduce A-102 payout by $250 because of a duplicate trade", AsksApproval: true),
+    ];
+
+    // The chat shell cascades the conversation to everything inside it, so the cards can send messages.
+    [CascadingParameter] public AgentContext? Chat { get; set; }
+
+    private Task SendAsync(string text) => Chat is null ? Task.CompletedTask : Chat.SendMessageAsync(text);
+}

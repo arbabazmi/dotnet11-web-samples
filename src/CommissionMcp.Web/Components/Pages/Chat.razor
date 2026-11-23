@@ -1,7 +1,9 @@
 @page "/"
+@using System.Globalization
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components.AI
 @using Microsoft.Extensions.AI
+@using CommissionMcp.Web.Components.Shared
 @using CommissionMcp.Web.Services
 @implements IDisposable
 @inject IChatClient ChatClient
@@ -12,84 +14,114 @@
 
 @if (_error is not null)
 {
-    <div class="notice notice-error" role="alert">
-        <strong>Could not reach the MCP server.</strong>
-        <p>@_error</p>
-        <p>Start it with <code>dotnet run --project src/CommissionMcp.Server --urls http://localhost:5290</code>, then retry.</p>
-        <button class="btn btn-primary" @onclick="ConnectAsync">Retry</button>
+    <div class="center-stage">
+        <div class="notice" role="alert">
+            <h1>Can't reach the MCP server</h1>
+            <p>@_error</p>
+            <p>Start it in another terminal, then try again:</p>
+            <pre>dotnet run --project src/CommissionMcp.Server --urls http://localhost:5290</pre>
+            <p class="muted">Looking for it at <code>@Tools.Endpoint</code></p>
+            <button class="sc-ai-btn sc-ai-btn--primary" @onclick="ConnectAsync">Try again</button>
+        </div>
     </div>
 }
 else if (_agent is null)
 {
-    <p class="muted">Connecting to the MCP server at @Tools.Endpoint ...</p>
+    <div class="center-stage"><p class="muted">Connecting to the MCP server at @Tools.Endpoint ...</p></div>
 }
 else
 {
-    <ChatPage Agent="_agent" Placeholder="Ask about an advisor, for example: Summarize advisor A-102 for October">
+    <ChatPage Agent="_agent" Placeholder="Ask about an advisor, a statement or a payout">
+        <Header>
+            <div class="topbar">
+                <div class="brand">
+                    <div class="brand-name">Commission assistant</div>
+                    <div class="brand-sub">Synthetic data. Changes need your approval.</div>
+                </div>
+                <div class="status">
+                    <span class="status-chip" title="The model answering your questions"><span class="dot"></span>@ModelLabel</span>
+                    <span class="status-chip" title="@Tools.Endpoint"><span class="dot"></span>MCP server · @Tools.Info.Count tools</span>
+                </div>
+            </div>
+            <div class="toolstrip" aria-label="Available tools">
+                @foreach (var t in Tools.Info)
+                {
+                    <span class="tool-chip @(t.NeedsApproval ? "gate" : "")" title="@t.Description">
+                        <code>@t.Name</code>
+                        <small>@(t.NeedsApproval ? "needs approval" : "read-only")</small>
+                    </span>
+                }
+            </div>
+        </Header>
+
         <WelcomeContent>
             <div class="welcome">
-                <h2>Commission assistant</h2>
-                <p class="muted">Model: <strong>@_provider</strong>. All data is synthetic. Tools run on the MCP server at @Tools.Endpoint.</p>
-                <ul>
-                    <li>Summarize advisor A-102 for October</li>
-                    <li>Show the statement for A-101 for 2026-09</li>
-                    <li>Reduce A-102 payout by $250 because of a duplicate trade <span class="muted">(asks for approval)</span></li>
-                </ul>
+                <h1>What would you like to know?</h1>
+                <p class="muted">Ask in plain language. The assistant reads commission data through the MCP server, and asks you before it changes anything.</p>
+                <PromptCards />
             </div>
         </WelcomeContent>
+
         <MessageListContent>
+            @* Real models often send an empty text block before their tool calls; draw nothing for it. *@
+            <BlockRenderer TBlock="RichContentBlock" Context="block" When="IsEmptyText"><span hidden></span></BlockRenderer>
+
             <BlockRenderer TBlock="FunctionApprovalBlock" Context="block">
-                <div class="tool-card tool-approval" data-status="@block.Status">
-                    <div class="tool-head">
-                        <span class="tool-badge">Approval needed</span>
-                        <code>@block.ToolName</code>
+                <div class="gate-card" data-status="@block.Status">
+                    <div class="gate-head">
+                        <span class="gate-badge">@StatusLabel(block.Status)</span>
+                        <span>The assistant wants to run <code>@block.ToolName</code>@(IsReadOnly(block.ToolName) ? " (read-only lookup, asked together with the change)" : "")</span>
                     </div>
-                    <dl class="tool-args">
+                    <dl class="kv">
                         @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
                         {
                             <dt>@arg.Key</dt>
-                            <dd>@arg.Value</dd>
+                            <dd class="@(arg.Key == "amount" ? "amount" : "")">@FormatArg(arg.Key, arg.Value)</dd>
                         }
                     </dl>
+                    @if (Effect(block) is { } effect)
+                    {
+                        <p class="gate-effect">@effect</p>
+                    }
                     @if (block.Status == ApprovalStatus.Pending)
                     {
-                        <p class="muted">This changes data. Approve to run it, or reject to leave everything as it is.</p>
-                        <div class="tool-actions">
-                            <button class="btn btn-primary" @onclick="block.Approve">Approve</button>
-                            <button class="btn btn-outline-secondary" @onclick="() => block.Reject(RejectReason)">Reject</button>
+                        <p class="gate-note">Nothing has changed yet. Approve to run it, or reject to leave everything as it is.</p>
+                        <div class="gate-actions">
+                            <button class="sc-ai-btn sc-ai-btn--primary" @onclick="block.Approve">Approve</button>
+                            <button class="sc-ai-btn sc-ai-btn--secondary" @onclick="() => block.Reject(RejectReason)">Reject</button>
                         </div>
                     }
                     else
                     {
-                        <p class="tool-status @(block.Status == ApprovalStatus.Approved ? "ok" : "no")">
-                            @(block.Status == ApprovalStatus.Approved ? "Approved: the tool ran." : "Rejected: nothing was changed.")
+                        <p class="gate-result @(block.Status == ApprovalStatus.Approved ? "ok" : "no")">
+                            @(block.Status == ApprovalStatus.Approved ? "Approved. The tool ran." : "Rejected. Nothing was changed.")
                         </p>
-                        @if (block.HasResult)
-                        {
-                            <details><summary>Result</summary><pre>@Pretty(block.Result)</pre></details>
-                        }
                     }
                 </div>
             </BlockRenderer>
+
             <BlockRenderer TBlock="FunctionInvocationContentBlock" Context="block">
-                <div class="tool-card">
-                    <div class="tool-head">
-                        <span class="tool-badge tool-badge-read">Tool call</span>
-                        <code>@block.ToolName</code>
-                        <span class="muted">@(block.HasResult ? "done" : "running...")</span>
-                    </div>
-                    <dl class="tool-args">
-                        @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
+                <details class="tool">
+                    <summary>
+                        <code class="tool-name">@block.ToolName</code>
+                        <span class="tool-inline">@Inline(block.Arguments)</span>
+                        <span class="tool-state @ToolStateClass(block)">@ToolStateText(block)</span>
+                    </summary>
+                    <div class="tool-body">
+                        <dl class="kv">
+                            @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
+                            {
+                                <dt>@arg.Key</dt>
+                                <dd>@FormatArg(arg.Key, arg.Value)</dd>
+                            }
+                        </dl>
+                        @if (block.HasResult)
                         {
-                            <dt>@arg.Key</dt>
-                            <dd>@arg.Value</dd>
+                            <div class="tool-result-label">Result</div>
+                            <pre>@Pretty(block.Result)</pre>
                         }
-                    </dl>
-                    @if (block.HasResult)
-                    {
-                        <details><summary>Result</summary><pre>@Pretty(block.Result)</pre></details>
-                    }
-                </div>
+                    </div>
+                </details>
             </BlockRenderer>
         </MessageListContent>
     </ChatPage>
@@ -100,13 +132,14 @@ else
 
     private UIAgent? _agent;
     private string? _error;
-    private string _provider = "";
 
-    protected override async Task OnInitializedAsync()
+    private string ModelLabel => (Config["Chat:Provider"] ?? "Demo") switch
     {
-        _provider = Config["Chat:Provider"] ?? "Demo";
-        await ConnectAsync();
-    }
+        var p when p.Equals("Demo", StringComparison.OrdinalIgnoreCase) => "Demo model (offline)",
+        var p => $"{p} · {Config["Chat:Model"]}",
+    };
+
+    protected override Task OnInitializedAsync() => ConnectAsync();
 
     private async Task ConnectAsync()
     {
@@ -122,6 +155,44 @@ else
             _error = ex.Message;
         }
     }
+
+    private static bool WasDeclined(FunctionInvocationContentBlock b) =>
+        b.HasResult && Pretty(b.Result).Contains("rejected", StringComparison.OrdinalIgnoreCase);
+
+    private static string ToolStateClass(FunctionInvocationContentBlock b) => !b.HasResult ? "run" : WasDeclined(b) ? "no" : "done";
+
+    private static string ToolStateText(FunctionInvocationContentBlock b) => !b.HasResult ? "running" : WasDeclined(b) ? "declined" : "done";
+
+    // When a model asks for a lookup and a change in one step, the framework asks approval for the whole batch.
+    private bool IsReadOnly(string? tool) => Tools.Info.Any(t => t.Name == tool && !t.NeedsApproval);
+
+    private static bool IsEmptyText(RichContentBlock b) => string.IsNullOrWhiteSpace(b.RawText);
+
+    private static string StatusLabel(ApprovalStatus s) => s switch
+    {
+        ApprovalStatus.Pending => "Approval needed",
+        ApprovalStatus.Approved => "Approved",
+        _ => "Rejected",
+    };
+
+    // Amounts read as money; everything else as plain text. Real models send raw JSON values, so go through text.
+    private static string FormatArg(string key, object? value)
+    {
+        var text = value?.ToString() ?? "";
+        if (key == "amount" && decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var amount))
+            return (amount < 0 ? "-" : amount > 0 ? "+" : "") + "$" + Math.Abs(amount).ToString("N2", CultureInfo.InvariantCulture);
+        return text;
+    }
+
+    private static string? Effect(FunctionApprovalBlock block)
+    {
+        if (block.Arguments is null || !block.Arguments.TryGetValue("amount", out var raw)) return null;
+        if (!decimal.TryParse(raw?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount) || amount == 0) return null;
+        return amount < 0 ? "This reduces the advisor's payout for the open month." : "This increases the advisor's payout for the open month.";
+    }
+
+    private static string Inline(IDictionary<string, object?>? args) =>
+        args is null ? "" : string.Join("  ", args.Select(kv => $"{kv.Key}: {FormatArg(kv.Key, kv.Value)}"));
 
     // Tool results can be plain text, JSON text or an MCP result object; show them as readable text.
     private static string Pretty(FunctionResultContent? result)

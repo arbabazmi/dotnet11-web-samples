@@ -9,6 +9,9 @@ public sealed class McpOptions
     public string Endpoint { get; set; } = "http://localhost:5290/mcp";
 }
 
+/// <summary>What the UI shows about a tool: its name and whether using it asks the user first.</summary>
+public sealed record ToolInfo(string Name, string? Description, bool NeedsApproval);
+
 /// <summary>
 /// Connects to the MCP server once and exposes its tools to the chat client.
 /// Tools that are not marked read-only get wrapped so the function-invocation middleware asks the user first.
@@ -20,6 +23,9 @@ public sealed class McpToolProvider(IOptions<McpOptions> options, HttpClient? ht
     private IReadOnlyList<AITool>? _tools;
 
     public string Endpoint => options.Value.Endpoint;
+
+    /// <summary>The tools found on the server, once connected. Empty before the first successful connection.</summary>
+    public IReadOnlyList<ToolInfo> Info { get; private set; } = [];
 
     public async Task<IReadOnlyList<AITool>> GetToolsAsync(CancellationToken ct = default)
     {
@@ -36,6 +42,7 @@ public sealed class McpToolProvider(IOptions<McpOptions> options, HttpClient? ht
 
             _client = await McpClient.CreateAsync(transport, cancellationToken: ct);
             var tools = await _client.ListToolsAsync(cancellationToken: ct);
+            Info = tools.Select(t => new ToolInfo(t.Name, t.Description, NeedsApproval(t))).ToList();
             _tools = tools.Select(Wrap).ToList();
             return _tools;
         }

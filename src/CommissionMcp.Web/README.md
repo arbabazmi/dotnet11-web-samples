@@ -17,10 +17,15 @@ dotnet run --project src/CommissionMcp.Web --urls http://localhost:5005
 ```
 
 Open http://localhost:5005. With no configuration the app uses the **Demo** provider, an offline stand-in for a model that
-needs no key (see below). Try:
+needs no key (see below). Try the example cards on the welcome screen, or type:
 
 - `Summarize advisor A-102 for October` (read-only; two tool calls, no approval)
 - `Reduce A-102 payout by $250 because of a duplicate trade` (write; pauses for Approve or Reject)
+
+> **Do not add `--no-launch-profile` to the web app.** That flag skips `launchSettings.json`, which sets
+> `ASPNETCORE_ENVIRONMENT=Development`. Without it the app runs as Production, ASP.NET Core stops serving the framework's
+> static files, and `blazor.web.js` and the stylesheet return errors: the page loads but never becomes interactive and the
+> log fills with `FileNotFoundException`. If you must skip the profile, set `$env:ASPNETCORE_ENVIRONMENT = "Development"`.
 
 ## Use a real model
 
@@ -76,6 +81,22 @@ Verified with `qwen2.5:7b` through Ollama on a CPU-only laptop (see "Live tests"
 requests the matching MCP tool calls, and writes its answer from the tool results. It is used when no key is set and in the
 tests. Everything around it is the real pipeline: the MCP client, the tool-calling middleware, the approval flow and the
 Blazor AI components.
+
+## The interface
+
+- **Top bar**: which model is answering, that the MCP server is connected, and the three tools, with the one that needs
+  approval marked.
+- **Welcome cards**: three example questions; clicking one sends it.
+- **Conversation**: your messages as bubbles, the assistant's answer streamed as plain text.
+- **Tool calls**: one line each (tool, arguments, status); click to open the arguments and the result. A call the user
+  declined shows "declined", not "done".
+- **Approval card**: amber while waiting, with the tool name, the arguments (the amount shown as money), what it will do,
+  and Approve and Reject buttons. It turns green or rose once decided. The view scrolls to a pending approval so the
+  buttons are always visible (`wwwroot/chat.js`).
+- Light and dark themes follow the system setting; the layout works down to phone width.
+
+The chat shell, bubbles and input come from the AI package's own stylesheet (`ai-chat.css`), which the app must link
+explicitly; `wwwroot/app.css` maps the app's colours onto its `--sc-ai-*` variables.
 
 ## How the pieces connect
 
