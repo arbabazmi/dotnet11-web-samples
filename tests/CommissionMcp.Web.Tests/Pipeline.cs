@@ -26,7 +26,8 @@ public sealed class Pipeline : IAsyncDisposable
     public AgentContext Chat { get; private set; } = null!;
     public IReadOnlyList<AITool> Tools { get; private set; } = null!;
 
-    public static async Task<Pipeline> CreateAsync()
+    /// <param name="model">A real chat client to use instead of the offline scripted one (for the opt-in live tests).</param>
+    public static async Task<Pipeline> CreateAsync(IChatClient? model = null)
     {
         var p = new Pipeline();
         var endpoint = new Uri(p._server.Server.BaseAddress, "/mcp");
@@ -35,8 +36,8 @@ public sealed class Pipeline : IAsyncDisposable
         var tools = await p._tools.GetToolsAsync();
         p.Tools = tools;
 
-        var client = p.Model.AsBuilder().UseFunctionInvocation().Build();
-        p._agent = new UIAgent(client, new ChatOptions { Tools = [.. tools] });
+        var client = (model ?? p.Model).AsBuilder().UseFunctionInvocation().Build();
+        p._agent = new UIAgent(client, new ChatOptions { Tools = [.. tools], Temperature = 0 });
         p.Chat = new AgentContext(p._agent);
 
         var http = p._server.CreateClient();

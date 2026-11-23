@@ -68,8 +68,7 @@ dotnet user-secrets set "Chat:Endpoint" "<optional base URL>"
 Environment variables work too (`Chat__Provider`, `Chat__Model`, `Chat__ApiKey`, `Chat__Endpoint`). The MCP server address
 is `Mcp:Endpoint` (default `http://localhost:5290/mcp`).
 
-**No real model has been run yet**; only the Demo provider has. Ollama was not installed on the development machine, so the
-Ollama path is covered by configuration tests only.
+Verified with `qwen2.5:7b` through Ollama on a CPU-only laptop (see "Live tests" below). Expect tens of seconds per turn.
 
 ## The Demo provider
 
@@ -125,10 +124,34 @@ Ten tests: five configuration tests for the model providers, and five that drive
 which tools need approval, a read-only question (calls shown, no approval), a write that pauses and changes nothing until
 approved, a rejection (data unchanged, model told it was declined), and an approved call the server refuses.
 
+## Live tests (opt-in)
+
+Three extra tests run the same pipeline against a real model. They are skipped unless a provider is configured, so a normal
+`dotnet test` never needs a model:
+
+```powershell
+$env:Chat__Provider = "Ollama"; $env:Chat__Model = "qwen2.5:7b"
+dotnet test tests/CommissionMcp.Web.Tests --filter LiveModelTests
+```
+
+Result with `qwen2.5:7b` (CPU only): all three passed, 29 to 41 seconds each.
+
+- **Read-only question**: the model called `get_advisor_summary` and answered with the right figures; no approval was asked.
+- **Write request, approved**: the model called `adjust_payout(advisorId=A-102, amount=-250.5, ...)`, the turn paused, the
+  data was unchanged until Approve, and then the adjustment was applied.
+- **Write request, rejected**: data unchanged; the model told the user the request was declined.
+
+Observations: a real model sends tool arguments as raw JSON values (`JsonElement`), not numbers; it may skip a tool the
+demo model always calls (it did not call `get_statement` for the October summary); and it emits an empty text block before
+its tool calls.
+
+Assertions are deliberately loose (which tool, that the write pauses, that reject changes nothing), because a real model
+is not deterministic.
+
 ## Not verified yet
 
 - The page was served and rendered over HTTP (title, welcome text, input box), but I have **not clicked through the
   interactive UI in a browser**: streaming in the page and the Approve and Reject buttons are covered by the headless tests
   that use the same `UIAgent` and blocks, not by a browser test.
-- No real language model has been used (Ollama support is configured and unit-tested, but Ollama has not been run).
+- Only one real model has been tried: `qwen2.5:7b` through Ollama, in the headless live tests. Other models, and hosted ones such as OpenAI, have not.
 - The second screenshot for the article (calling the MCP server from a different MCP client) has not been taken.
