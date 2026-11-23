@@ -1,0 +1,16 @@
+@using Microsoft.AspNetCore.Components.AI
+@* Approves a read-only tool call for the user. Used when the framework asks about a whole batch of calls because one of
+   them changes data: the lookups carry no risk, so only the change should wait for a click. *@
+
+@code {
+    [Parameter, EditorRequired] public FunctionApprovalBlock Block { get; set; } = default!;
+
+    private bool _done;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (_done || Block.Status != ApprovalStatus.Pending) return;
+        _done = true;
+        Block.Approve();
+    }
+}

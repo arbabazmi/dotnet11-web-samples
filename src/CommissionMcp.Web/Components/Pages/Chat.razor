@@ -66,11 +66,15 @@ else
             @* Real models often send an empty text block before their tool calls; draw nothing for it. *@
             <BlockRenderer TBlock="RichContentBlock" Context="block" When="IsEmptyText"><span hidden></span></BlockRenderer>
 
+            <BlockRenderer TBlock="FunctionApprovalBlock" Context="block" When="b => IsReadOnly(b.ToolName)">
+                <AutoApprove Block="block" />
+            </BlockRenderer>
+
             <BlockRenderer TBlock="FunctionApprovalBlock" Context="block">
                 <div class="gate-card" data-status="@block.Status">
                     <div class="gate-head">
                         <span class="gate-badge">@StatusLabel(block.Status)</span>
-                        <span>The assistant wants to run <code>@block.ToolName</code>@(IsReadOnly(block.ToolName) ? " (read-only lookup, asked together with the change)" : "")</span>
+                        <span>The assistant wants to run <code>@block.ToolName</code></span>
                     </div>
                     <dl class="kv">
                         @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
