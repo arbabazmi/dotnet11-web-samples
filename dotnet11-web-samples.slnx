@@ -1,4 +1,11 @@
 <Solution>
-  <Folder Name="/src/"><Project Path="src/FeeCalc.Api/FeeCalc.Api.csproj" /></Folder>
-  <Folder Name="/tests/"><Project Path="tests/FeeCalc.Api.Tests/FeeCalc.Api.Tests.csproj" /></Folder>
+  <Folder Name="/src/">
+    <Project Path="src/FeeCalc.Api/FeeCalc.Api.csproj" />
+    <Project Path="src/Aot.Bench/Aot.Bench.csproj" />
+    <Project Path="src/CommissionMcp.Server/CommissionMcp.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FeeCalc.Api.Tests/FeeCalc.Api.Tests.csproj" />
+    <Project Path="tests/CommissionMcp.Server.Tests/CommissionMcp.Server.Tests.csproj" />
+  </Folder>
 </Solution>
