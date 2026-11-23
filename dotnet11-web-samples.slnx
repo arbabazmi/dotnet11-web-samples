@@ -3,9 +3,11 @@
     <Project Path="src/FeeCalc.Api/FeeCalc.Api.csproj" />
     <Project Path="src/Aot.Bench/Aot.Bench.csproj" />
     <Project Path="src/CommissionMcp.Server/CommissionMcp.Server.csproj" />
+    <Project Path="src/CommissionMcp.Web/CommissionMcp.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/FeeCalc.Api.Tests/FeeCalc.Api.Tests.csproj" />
     <Project Path="tests/CommissionMcp.Server.Tests/CommissionMcp.Server.Tests.csproj" />
+    <Project Path="tests/CommissionMcp.Web.Tests/CommissionMcp.Web.Tests.csproj" />
   </Folder>
 </Solution>

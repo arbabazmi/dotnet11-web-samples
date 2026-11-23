@@ -1,0 +1,136 @@
+@page "/"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components.AI
+@using Microsoft.Extensions.AI
+@using CommissionMcp.Web.Services
+@implements IDisposable
+@inject IChatClient ChatClient
+@inject McpToolProvider Tools
+@inject IConfiguration Config
+
+<PageTitle>Commission assistant</PageTitle>
+
+@if (_error is not null)
+{
+    <div class="notice notice-error" role="alert">
+        <strong>Could not reach the MCP server.</strong>
+        <p>@_error</p>
+        <p>Start it with <code>dotnet run --project src/CommissionMcp.Server --urls http://localhost:5290</code>, then retry.</p>
+        <button class="btn btn-primary" @onclick="ConnectAsync">Retry</button>
+    </div>
+}
+else if (_agent is null)
+{
+    <p class="muted">Connecting to the MCP server at @Tools.Endpoint ...</p>
+}
+else
+{
+    <ChatPage Agent="_agent" Placeholder="Ask about an advisor, for example: Summarize advisor A-102 for October">
+        <WelcomeContent>
+            <div class="welcome">
+                <h2>Commission assistant</h2>
+                <p class="muted">Model: <strong>@_provider</strong>. All data is synthetic. Tools run on the MCP server at @Tools.Endpoint.</p>
+                <ul>
+                    <li>Summarize advisor A-102 for October</li>
+                    <li>Show the statement for A-101 for 2026-09</li>
+                    <li>Reduce A-102 payout by $250 because of a duplicate trade <span class="muted">(asks for approval)</span></li>
+                </ul>
+            </div>
+        </WelcomeContent>
+        <MessageListContent>
+            <BlockRenderer TBlock="FunctionApprovalBlock" Context="block">
+                <div class="tool-card tool-approval" data-status="@block.Status">
+                    <div class="tool-head">
+                        <span class="tool-badge">Approval needed</span>
+                        <code>@block.ToolName</code>
+                    </div>
+                    <dl class="tool-args">
+                        @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
+                        {
+                            <dt>@arg.Key</dt>
+                            <dd>@arg.Value</dd>
+                        }
+                    </dl>
+                    @if (block.Status == ApprovalStatus.Pending)
+                    {
+                        <p class="muted">This changes data. Approve to run it, or reject to leave everything as it is.</p>
+                        <div class="tool-actions">
+                            <button class="btn btn-primary" @onclick="block.Approve">Approve</button>
+                            <button class="btn btn-outline-secondary" @onclick="() => block.Reject(RejectReason)">Reject</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="tool-status @(block.Status == ApprovalStatus.Approved ? "ok" : "no")">
+                            @(block.Status == ApprovalStatus.Approved ? "Approved: the tool ran." : "Rejected: nothing was changed.")
+                        </p>
+                        @if (block.HasResult)
+                        {
+                            <details><summary>Result</summary><pre>@Pretty(block.Result)</pre></details>
+                        }
+                    }
+                </div>
+            </BlockRenderer>
+            <BlockRenderer TBlock="FunctionInvocationContentBlock" Context="block">
+                <div class="tool-card">
+                    <div class="tool-head">
+                        <span class="tool-badge tool-badge-read">Tool call</span>
+                        <code>@block.ToolName</code>
+                        <span class="muted">@(block.HasResult ? "done" : "running...")</span>
+                    </div>
+                    <dl class="tool-args">
+                        @foreach (var arg in block.Arguments ?? new Dictionary<string, object?>())
+                        {
+                            <dt>@arg.Key</dt>
+                            <dd>@arg.Value</dd>
+                        }
+                    </dl>
+                    @if (block.HasResult)
+                    {
+                        <details><summary>Result</summary><pre>@Pretty(block.Result)</pre></details>
+                    }
+                </div>
+            </BlockRenderer>
+        </MessageListContent>
+    </ChatPage>
+}
+
+@code {
+    private const string RejectReason = "The user declined this change.";
+
+    private UIAgent? _agent;
+    private string? _error;
+    private string _provider = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _provider = Config["Chat:Provider"] ?? "Demo";
+        await ConnectAsync();
+    }
+
+    private async Task ConnectAsync()
+    {
+        _error = null;
+        try
+        {
+            var tools = await Tools.GetToolsAsync();
+            _agent = new UIAgent(ChatClient, new ChatOptions { Tools = [.. tools] });
+        }
+        catch (Exception ex)
+        {
+            _agent = null;
+            _error = ex.Message;
+        }
+    }
+
+    // Tool results can be plain text, JSON text or an MCP result object; show them as readable text.
+    private static string Pretty(FunctionResultContent? result)
+    {
+        if (result is null) return "";
+        var (text, _) = ScriptedChatClient.ResultText(result);
+        try { return JsonSerializer.Serialize(JsonDocument.Parse(text).RootElement, new JsonSerializerOptions { WriteIndented = true }); }
+        catch (JsonException) { return text; }
+    }
+
+    public void Dispose() => _agent?.Dispose();
+}
